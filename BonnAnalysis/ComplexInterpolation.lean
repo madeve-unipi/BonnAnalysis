@@ -91,13 +91,6 @@ lemma pow_bound₁ {M:ℝ} (hM: M > 0) {z: ℂ} (hz: z.re ∈ Icc 0 1) : Complex
     · exact hz.2
 }
 
-/-Not sure how many of these are actually used later -/
-def at_height (f:ℂ → ℂ) (y:ℝ) : (Icc 0 1 : Set ℝ) → ℝ  := fun x ↦ Complex.abs (f (x+ I*y))
-
-def sup_at_height (f: ℂ → ℂ) (y: ℝ) := sSup ((at_height f y)'' univ)
-
-def abs_sup (f: ℂ → ℂ ) := sSup ((fun z ↦ Complex.abs (f z))'' { z | z.re ∈ Icc 0 1} )
-
 lemma abs_fun_nonempty (f: ℂ → ℂ) : ((fun z ↦ Complex.abs (f z))'' { z | z.re ∈ Icc 0 1}).Nonempty := by{
   simp
   use 0
@@ -117,12 +110,6 @@ lemma abs_fun_bounded {f:ℂ → ℂ} (h2f : IsBounded (f '' { z | z.re ∈ Icc 
   simp at hR
   exact hR
 }
-
--- For the first version of this, we need
-#check exists_seq_tendsto_sSup
-#check tendsto_subseq_of_bounded
-
-
 
 /- Some technical lemmas to apply the maximum modulus principle -/
 lemma strip_prod : { z:ℂ  | z.re ∈ Ioo 0 1} = (Ioo 0 1 : Set ℝ) ×ℂ univ := by{
@@ -177,10 +164,16 @@ theorem DiffContOnCl.norm_le_pow_mul_pow''' {f : ℂ → ℂ}
         _ ≤ 1 := by simp[hs]
       }
 
-      by_cases h : ∃ w : ℂ, Complex.abs (f w) > 0
+      by_cases h : ∃ w : ℂ, w ∈ {z | z.re ∈ Icc 0 1} ∧ Complex.abs (f w) > 0
       · obtain ⟨u, hu1, hu2, hu3⟩ :=  exists_seq_tendsto_sSup (abs_fun_nonempty f) (abs_fun_bounded h2f)
         simp at hu3
         obtain ⟨z, hz⟩ := Classical.axiom_of_choice hu3
+        have hzu : (norm ∘ f) ∘ z = u := by{
+          funext n
+          specialize hz n
+          rw[← hz.2]
+          rfl
+        }
 
         have hrange₁ : range z ⊆ {w | (0 ≤ w.re ∧ w.re ≤ 1)} := by{
           simp[range]
@@ -205,18 +198,14 @@ theorem DiffContOnCl.norm_le_pow_mul_pow''' {f : ℂ → ℂ}
               apply Filter.Tendsto.norm
               exact hlim
             · simp
-              --rw[← EReal.coe_eq_coe_iff]
-              --lt_sSup_iff
+              apply ne_of_lt
+              obtain ⟨w, hw1, hw2⟩ := h
+              calc
+              0 < Complex.abs (f w) := hw2
+              _ ≤ sSup ((fun z ↦ Complex.abs (f z)) '' {z | 0 ≤ z.re ∧ z.re ≤ 1}) := le_csSup (abs_fun_bounded h2f) (by simp; use w; simp at hw1; simp[hw1])
 
-              sorry --This should now be relatively easy since the map is bounded and we explicitly have a point where it is >0, but I can't find the appropriate lemma right away
             · simp
-              have : (norm ∘ f) ∘ z = u := by{
-                funext n
-                specialize hz n
-                rw[← hz.2]
-                rfl
-              }
-              rw[this]
+              rw[hzu]
               simp at hu2
               exact hu2
           }
@@ -281,15 +270,35 @@ theorem DiffContOnCl.norm_le_pow_mul_pow''' {f : ℂ → ℂ}
 
         obtain ⟨z',hz', φ, hφ₁, hφ₂⟩ := tendsto_subseq_of_bounded (x:=z) hbz (by simp)
 
+        have hu': Tendsto u atTop (nhds (Complex.abs (f z'))) := by {
+          rw[tendsto_iff_tendsto_subseq_of_monotone hu1 (StrictMono.tendsto_atTop hφ₁)]
+          rw[← hzu]
+          apply Tendsto.comp (y:= nhds z')
+          · apply ContinuousAt.tendsto
+            apply ContinuousAt.comp
+            · apply Continuous.continuousAt  continuous_norm
+            · have hz'strip : z' ∈ {w | 0 ≤ w.re ∧ w.re ≤ 1} := by {
+              rw[subset_def] at hrangeclos
+              exact hrangeclos z' hz'
+              }
+              have := DiffContOnCl.continuousOn hf
+              rw[closure_strip] at this
+              apply ContinuousOn.continuousAt this
+              -- BUT NOW THIS IS FALSE IF z' IS GENUINELY ON THE STRIP
+              sorry
+          · exact hφ₂
+        }
+
+        have hsup : Complex.abs (f z') = sSup ((fun z ↦ Complex.abs (f z)) '' {z | z.re ∈ Icc 0 1}) := tendsto_nhds_unique hu' hu2
 
         have hmax : IsMaxOn (norm ∘ f) { w:ℂ  | w.re ∈ Icc 0 1} z' := by{
           simp[IsMaxOn, IsMaxFilter]
           intro w hw₁ hw₂
-          -- I want to say: find n with Complex.abs (f (u n)) ≥  Complex.abs (f w)
-          --simp[Tendsto, map, atTop, nhds] at hu2
-          sorry
+          rw[hsup]
+          apply le_csSup_of_le (abs_fun_bounded h2f) (b:= Complex.abs (f w)) ?_ (by simp)
+          simp
+          use w
         }
-
 
         have hmax' : IsMaxOn (norm ∘ f) { w:ℂ  | w.re ∈ Ioo 0 1} z' := by{
           apply IsMaxOn.on_subset hmax
@@ -364,6 +373,8 @@ theorem DiffContOnCl.norm_le_pow_mul_pow''' {f : ℂ → ℂ}
             _ ≤ _ := h₁f
       · simp at h
         specialize h (t + I * y)
+        simp at h
+        specialize h ht ht'
         rw[h]
         simp
     }
