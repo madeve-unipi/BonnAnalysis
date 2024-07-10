@@ -273,7 +273,29 @@ theorem DiffContOnCl.norm_le_pow_mul_pow''' {f : ℂ → ℂ}
         have hu': Tendsto u atTop (nhds (Complex.abs (f z'))) := by {
           rw[tendsto_iff_tendsto_subseq_of_monotone hu1 (StrictMono.tendsto_atTop hφ₁)]
           rw[← hzu]
-          apply Tendsto.comp (y:= nhds z')
+          apply Tendsto.comp (y:= nhdsWithin z' {w:ℂ | w.re ∈ Icc 0 1})
+          · have hz'strip : z' ∈ {w | 0 ≤ w.re ∧ w.re ≤ 1} := by {
+              rw[subset_def] at hrangeclos
+              exact hrangeclos z' hz'
+            }
+            have := ContinuousOn.restrict (DiffContOnCl.continuousOn hf)
+            rw[closure_strip] at this
+            simp at this
+            simp
+            apply Tendsto.comp (y:= nhds (f z'))
+            · apply Continuous.tendsto continuous_norm
+            · rw[tendsto_nhdsWithin_iff_subtype hz'strip]
+              apply Continuous.tendsto
+              exact this
+          · apply tendsto_nhdsWithin_of_tendsto_nhds_of_eventually_within
+            · exact hφ₂
+            · filter_upwards
+              intro n
+              specialize hz (φ n)
+              simp
+              exact hz.1
+
+          /-
           · apply ContinuousAt.tendsto
             apply ContinuousAt.comp
             · apply Continuous.continuousAt  continuous_norm
@@ -286,7 +308,7 @@ theorem DiffContOnCl.norm_le_pow_mul_pow''' {f : ℂ → ℂ}
               apply ContinuousOn.continuousAt this
               -- BUT NOW THIS IS FALSE IF z' IS GENUINELY ON THE STRIP
               sorry
-          · exact hφ₂
+          · exact hφ₂-/
         }
 
         have hsup : Complex.abs (f z') = sSup ((fun z ↦ Complex.abs (f z)) '' {z | z.re ∈ Icc 0 1}) := tendsto_nhds_unique hu' hu2
@@ -378,7 +400,6 @@ theorem DiffContOnCl.norm_le_pow_mul_pow''' {f : ℂ → ℂ}
         rw[h]
         simp
     }
-
 
 /-Next goal: prove the three lines lemma with bounds M₀=M₁=1 -/
 
