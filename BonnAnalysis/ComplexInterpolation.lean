@@ -4,6 +4,7 @@ import BonnAnalysis.Dual
 import Mathlib.Topology.MetricSpace.Sequences
 import Mathlib.Analysis.Complex.HalfPlane
 import Mathlib.Analysis.Complex.ReImTopology
+import Mathlib.Analysis.SpecialFunctions.Pow.Deriv
 
 noncomputable section
 
@@ -33,6 +34,12 @@ lemma Real.rpow_le_rpow_iff_left {M:ℝ} (hM: M>0) (a b : ℝ) : M^a ≤ M^b ↔
   rw [← mul_le_mul_right hMb, ←Real.rpow_add hM, ← Real.rpow_add hM, add_right_neg, Real.rpow_zero,
     Real.rpow_le_one_iff_of_pos hM]
   simp
+}
+
+lemma Real.le_one_of_add_nonneg_eq_one {t s : ℝ} (hs : 0 ≤ s) (hts : t + s = 1) : t ≤ 1 := by{
+  calc
+  t = 1 - s := eq_sub_of_add_eq hts
+  _ ≤ 1 := by simp[hs]
 }
 
 
@@ -99,16 +106,12 @@ lemma abs_fun_nonempty (f: ℂ → ℂ) : ((fun z ↦ Complex.abs (f z))'' { z |
 
 lemma abs_fun_bounded {f:ℂ → ℂ} (h2f : IsBounded (f '' { z | z.re ∈ Icc 0 1})) : BddAbove ((fun z ↦ Complex.abs (f z))'' { z | z.re ∈ Icc 0 1}) := by{
   simp[BddAbove, upperBounds]
-  obtain ⟨R, hR⟩:= (Metric.isBounded_iff_subset_ball 0).mp h2f
-  simp only [subset_def, mem_image] at hR
+  obtain ⟨R, hR⟩:= (isBounded_iff_forall_norm_le).mp h2f
   use R
   simp
   intro r z hz₁ hz₂ habs
   rw[← habs]
-  apply le_of_lt
-  specialize hR (f z) (by use z; constructor; simp[hz₁, hz₂]; rfl)
-  simp at hR
-  exact hR
+  exact hR (f z) (by use z; simp[hz₁, hz₂])
 }
 
 /- Some technical lemmas to apply the maximum modulus principle -/
@@ -157,12 +160,6 @@ theorem DiffContOnCl.norm_le_pow_mul_pow''' {f : ℂ → ℂ}
     (h₀f : ∀ y : ℝ, ‖f (I * y)‖ ≤ 1) (h₁f : ∀ y : ℝ, ‖f (1 + I * y)‖ ≤ 1)
     {y t s : ℝ} (ht : 0 ≤ t) (hs : 0 ≤ s) (hts : t + s = 1) (hlim: Tendsto f (Bornology.cobounded ℂ ⊓ Filter.principal ({ z: ℂ | z.re ∈ Icc 0 1})) (nhds 0)) :
     ‖f (t + I * y)‖ ≤ 1 := by{
-
-      have ht' : t ≤ 1 := by{
-        calc
-        t = 1 - s := eq_sub_of_add_eq hts
-        _ ≤ 1 := by simp[hs]
-      }
 
       by_cases h : ∃ w : ℂ, w ∈ {z | z.re ∈ Icc 0 1} ∧ Complex.abs (f w) > 0
       · obtain ⟨u, hu1, hu2, hu3⟩ :=  exists_seq_tendsto_sSup (abs_fun_nonempty f) (abs_fun_bounded h2f)
@@ -294,21 +291,6 @@ theorem DiffContOnCl.norm_le_pow_mul_pow''' {f : ℂ → ℂ}
               specialize hz (φ n)
               simp
               exact hz.1
-
-          /-
-          · apply ContinuousAt.tendsto
-            apply ContinuousAt.comp
-            · apply Continuous.continuousAt  continuous_norm
-            · have hz'strip : z' ∈ {w | 0 ≤ w.re ∧ w.re ≤ 1} := by {
-              rw[subset_def] at hrangeclos
-              exact hrangeclos z' hz'
-              }
-              have := DiffContOnCl.continuousOn hf
-              rw[closure_strip] at this
-              apply ContinuousOn.continuousAt this
-              -- BUT NOW THIS IS FALSE IF z' IS GENUINELY ON THE STRIP
-              sorry
-          · exact hφ₂-/
         }
 
         have hsup : Complex.abs (f z') = sSup ((fun z ↦ Complex.abs (f z)) '' {z | z.re ∈ Icc 0 1}) := tendsto_nhds_unique hu' hu2
@@ -349,7 +331,7 @@ theorem DiffContOnCl.norm_le_pow_mul_pow''' {f : ℂ → ℂ}
             simp
             constructor
             · exact ht
-            · exact ht'
+            · exact Real.le_one_of_add_nonneg_eq_one hs hts
           }
           simp
           rw[hpt, ← h0]
@@ -373,7 +355,7 @@ theorem DiffContOnCl.norm_le_pow_mul_pow''' {f : ℂ → ℂ}
           simp[IsMaxOn, IsMaxFilter] at hmax
           specialize hmax (t+I*y)
           simp at hmax
-          specialize hmax ht ht'
+          specialize hmax ht (Real.le_one_of_add_nonneg_eq_one hs hts)
           obtain hz'₁|hz'₂ := this
           · specialize h₀f (z'.im)
             have : z' = I * z'.im := by {
@@ -396,7 +378,7 @@ theorem DiffContOnCl.norm_le_pow_mul_pow''' {f : ℂ → ℂ}
       · simp at h
         specialize h (t + I * y)
         simp at h
-        specialize h ht ht'
+        specialize h ht (Real.le_one_of_add_nonneg_eq_one hs hts)
         rw[h]
         simp
     }
@@ -459,29 +441,30 @@ lemma bound_factor_le_one {ε : ℝ} (hε: ε > 0) {z : ℂ} (hz: z.re ∈ Icc 0
 }
 
 
+-- use isBounded_iff_forall_norm_le
 lemma perturb_isbounded {f: ℂ → ℂ} (h2f : IsBounded (f '' { z | z.re ∈ Icc 0 1})) {ε : ℝ} (hε: ε>0) : IsBounded ((perturb f ε) '' { z | z.re ∈ Icc 0 1}) := by{
-  apply (Metric.isBounded_iff_subset_ball 0).mpr
-  obtain ⟨R, hR⟩:= (Metric.isBounded_iff_subset_ball 0).mp h2f
-  simp only [subset_def, mem_image] at hR
+  rw[isBounded_iff_forall_norm_le]
+  obtain ⟨R, hR⟩:= (isBounded_iff_forall_norm_le).mp h2f
   use R
   intro x hx
   simp at hx
   obtain ⟨z, hz₁, hz₂⟩ := hx
   rw[← hz₂]
   specialize hR (f z) (by use z; simp; exact hz₁)
-  simp at hR
-  have : R ≥ 0 := by{
-    calc
-    0 ≤ Complex.abs (f z) := by exact AbsoluteValue.nonneg Complex.abs (f z)
-    _ ≤  R := le_of_lt hR
-  }
   simp
   calc
-  Complex.abs (perturb f ε z) ≤ Complex.abs (f z) * Real.exp (ε * ((z.re)^2 - 1 - (z.im)^2)) := perturb_bound f ε z
-  _ < R * Real.exp (ε * ((z.re)^2 - 1 - (z.im)^2)) := by gcongr
-  _ ≤ R * 1 := by gcongr; apply bound_factor_le_one hε; simp; exact hz₁
-  _ ≤ R := by simp
+  _ ≤ _ := perturb_bound f ε z
+  _ ≤ R := by {
+    rw[← mul_one R]
+    gcongr
+    · calc
+      _ ≤ _ := AbsoluteValue.nonneg Complex.abs (f z)
+      _ ≤ R := hR
+    · exact hR
+    · exact bound_factor_le_one hε hz₁
+  }
 }
+
 
 -- This can probably be made shorter by using bound_factor_le_one
 lemma perturb_bound_left {f: ℂ → ℂ} (h₀f : ∀ y : ℝ, ‖f (I * y)‖ ≤ 1) {ε : ℝ} (hε: ε > 0) (y: ℝ) : Complex.abs (perturb f ε (I*y)) ≤ 1 := by{
@@ -690,6 +673,19 @@ theorem DiffContOnCl.norm_le_pow_mul_pow'' {f : ℂ → ℂ}
     }
 
 
+lemma DiffContOnCl.const_cpow {a: ℂ} (ha: a ≠ 0) {s: Set ℂ} {f: ℂ → ℂ} (hf: DiffContOnCl ℂ f s) : DiffContOnCl ℂ (fun (z:ℂ) ↦ a^ (f z)) s := by{
+  apply DiffContOnCl.mk
+  · apply DifferentiableOn.const_cpow
+    · exact hf.differentiableOn
+    · left; exact ha
+  · apply ContinuousOn.const_cpow
+    · exact hf.continuousOn
+    · left; exact ha
+}
+
+lemma DiffContOnCl.id {s: Set ℂ} : DiffContOnCl ℂ id s := DiffContOnCl.mk differentiableOn_id continuousOn_id
+
+
 /-- Hadamard's three lines lemma/theorem on the unit strip. -/
 theorem DiffContOnCl.norm_le_pow_mul_pow₀₁ {f : ℂ → ℂ}
     (hf : DiffContOnCl ℂ f { z | z.re ∈ Ioo 0 1})
@@ -698,14 +694,6 @@ theorem DiffContOnCl.norm_le_pow_mul_pow₀₁ {f : ℂ → ℂ}
     (h₀f : ∀ y : ℝ, ‖f (I * y)‖ ≤ M₀) (h₁f : ∀ y : ℝ, ‖f (1 + I * y)‖ ≤ M₁)
     {y t s : ℝ} (ht : 0 ≤ t) (hs : 0 ≤ s) (hts : t + s = 1) :
     ‖f (t + I * y)‖ ≤ M₀ ^ s * M₁ ^ t := by{
-
-      have hts'' : s = 1-t := by {
-        symm
-        -- Not sure why this is so messed up if I don't make it explicit
-        rw[@sub_eq_of_eq_add ℝ _ (1:ℝ) t s]
-        rw[add_comm]
-        exact hts.symm
-      }
 
       let g:= fun z ↦ M₀ ^ (z-1) * M₁ ^(-z) * (f z)
       let p₁ : ℂ → ℂ := fun z ↦ M₀ ^ (z-1)
@@ -718,53 +706,29 @@ theorem DiffContOnCl.norm_le_pow_mul_pow₀₁ {f : ℂ → ℂ}
         · simp only [h]
           apply DiffContOnCl.smul
           · simp only [p₁]
-            sorry
+            apply DiffContOnCl.const_cpow (by norm_cast; exact ne_of_gt hM₀)
+            simp_rw[sub_eq_add_neg]
+            apply DiffContOnCl.add_const DiffContOnCl.id
           · simp only [p₂]
-            sorry
+            apply DiffContOnCl.const_cpow (by norm_cast; exact ne_of_gt hM₁)
+            exact DiffContOnCl.neg DiffContOnCl.id
         · exact hf
       }
 
       have h2g:  IsBounded (g '' { z | z.re ∈ Icc 0 1}) := by {
-        obtain ⟨R, hR⟩   := (Metric.isBounded_iff_subset_ball 0).mp h2f
-        simp only [subset_def, mem_image] at hR
-        have hR' : ∀ x ∈ {z | z.re ∈ Icc 0 1}, Complex.abs (f x) < R := by{
-          intro x hx
-          specialize hR (f x) (by use x)
-          simp at hR
-          assumption
-        }
-
-        rw[Metric.isBounded_image_iff]
+        obtain ⟨R, hR⟩ :=  isBounded_iff_forall_norm_le.mp h2f
+        rw[isBounded_iff_forall_norm_le]
         let A := max 1 (1/M₀)
         let B := max 1 (1/M₁)
-        use 2*A*B*R
-        intro z hz z' hz'
-        dsimp at hz
-        dsimp at hz'
-        simp_rw[g]
-        rw[Complex.dist_eq]
-
-        have : Complex.abs (↑M₀ ^ (z - 1) * ↑M₁ ^ (-z) * f z - ↑M₀ ^ (z' - 1) * ↑M₁ ^ (-z') * f z') ≤ Complex.abs (↑M₀ ^ (z - 1) * ↑M₁ ^ (-z) * f z) + Complex.abs (- ↑M₀ ^ (z' - 1) * ↑M₁ ^ (-z') * f z') := by{
-          have := AbsoluteValue.add_le Complex.abs (↑M₀ ^ (z - 1) * ↑M₁ ^ (-z) * f z) (- ↑M₀ ^ (z' - 1) * ↑M₁ ^ (-z') * f z')
-          simp at this
-          simp
-          exact this
-          }
-
-        simp at this
-        calc
-        Complex.abs (↑M₀ ^ (z - 1) * ↑M₁ ^ (-z) * f z - ↑M₀ ^ (z' - 1) * ↑M₁ ^ (-z') * f z') ≤ Complex.abs (↑M₀ ^ (z - 1)) * Complex.abs (↑M₁ ^ (-z)) * Complex.abs (f z) +
-    Complex.abs (↑M₀ ^ (z' - 1)) * Complex.abs (↑M₁ ^ (-z')) * Complex.abs (f z') := this
-      _ ≤ A * B * R + A * B * R := by{
+        use A*B*R
+        intro w hw
+        simp at hw
+        obtain ⟨z, hz₁, hz₂, hz₃⟩ := hw
+        simp[g]
         gcongr
-        · exact pow_bound₀ hM₀ hz
-        · exact pow_bound₁ hM₁ hz
-        · apply le_of_lt; apply hR' z; exact hz
-        · exact pow_bound₀ hM₀ hz'
-        · exact pow_bound₁ hM₁ hz'
-        · apply le_of_lt; apply hR' z'; exact hz'
-      }
-      _ = 2 * A * B * R := by ring
+        · apply pow_bound₀ hM₀ (by simp; exact hz₁)
+        · apply pow_bound₁ hM₁ (by simp; exact hz₁)
+        · exact hR (f z) (by use z; simp[hz₁])
       }
 
 
@@ -836,7 +800,7 @@ theorem DiffContOnCl.norm_le_pow_mul_pow₀₁ {f : ℂ → ℂ}
       rw[← mul_le_mul_left hM₁',← mul_le_mul_left hM₀']
       nth_rewrite 2 [mul_comm (M₁^(-t)), ← mul_assoc]
       rw[mul_assoc, mul_assoc, ← Real.rpow_add hM₁ t (-t)]
-      simp[hts'']
+      simp[eq_sub_of_add_eq (add_comm t s ▸ hts)]
       rw[ ← Real.rpow_add hM₀ (t-1) (1-t)]
       simp
       rw[← mul_assoc]
@@ -857,14 +821,7 @@ theorem DiffContOnCl.norm_le_pow_mul_pow {a b : ℝ} {f : ℂ → ℂ} (hab: a<b
           exact hts.symm
         }
 
-      -- DUPLICATE FROM PREVIOUS PROOF
-      have hts'' : s = 1-t := by {
-        symm
-        -- Not sure why this is so messed up if I don't make it explicit
-        rw[@sub_eq_of_eq_add ℝ _ (1:ℝ) t s]
-        rw[add_comm]
-        exact hts.symm
-      }
+      have hts'' : s = 1-t := eq_sub_of_add_eq (add_comm t s ▸ hts)
 
       have hax: x ≥ a := by{
         simp[hx]
